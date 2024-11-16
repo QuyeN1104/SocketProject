@@ -1,97 +1,114 @@
 import socket
+from alive_progress import alive_bar
+import time
 import os
+import math
+import concurrent.futures
+import sys
 
-ENCODING = 'utf-8'
-PORT_SERVER = 5052
-HOST_SERVER = '192.168.1.169'
-BUFFER_SIZE = 1024  # Kích thước bộ đệm để truyền dữ liệu
-LENGTH = 16
+PORT = 5051
+SERVER = socket.gethostbyname(socket.gethostname())
+ADDRESS =(SERVER, PORT)
+LENGTH_SIZE = 16 #16 bytes để truyền kích thước file
+LENGTH_MODE = 8  # 8 bytes để đọc mode
+LENGTH_MESS = 13 # 13 bytes tín hiệu phản hồi lại bên gửi
+BUFFER = 1024   # bộ nhớ đệm 1024 bytes
+message_notenough = 'NOTENOUGH'
+message_enough = 'ENOUGH'
+message_success = 'SUCCESS'
+message_error_notfound = 'ERRORNOTFOUND'
 
-# Thêm padding vào file_size trước khi gửi
-def file_size_to_header(file_name):
-    if os.path.isfile(file_name):
-        file_size = os.path.getsize(file_name)
-        encoded_file_size = str(file_size).encode(ENCODING)
-        encoded_file_size += b' ' * (LENGTH - len(encoded_file_size))
-        print("len size", len(encoded_file_size))
-        return encoded_file_size
-    
-# Thêm padding vào file_name trước khi gửi
-def file_name_to_header(file_name):
-    if os.path.isfile(file_name):
-        encoded_file_name = file_name.encode(ENCODING)
-        encoded_file_name = encoded_file_name + (b' ' * (BUFFER_SIZE - len(file_name)))
-        print("len name : ", len(encoded_file_name))
-        return encoded_file_name
-    
-# Function to upload file
-def upload_file(connection, file_name):
-    if os.path.isfile(file_name):
-        connection.send('upload'.encode(ENCODING))
+def init_client():
+    client = socket.socket(socket.AF_INET,socket.SOCK_STREAM)
+    client.connect(ADDRESS)
+    return client
 
-        #gửi tên file 
-        file_name_encoded = file_name_to_header(file_name)
-        connection.send(file_name_encoded) 
+#xử lý lấy tổng dung lượng file và gửi dung lượng file
+def send_path_and_size(client, path_file): 
+    file_size = os.path.getsize(path_file)
+    file_size_string = str(file_size).ljust(LENGTH_SIZE)
+    client.send(path_file.ljust(BUFFER).encode())
+    client.send(file_size_string.encode())
+    return file_size
 
-        # gửi số lượng byte của file
-        file_size_encoded = file_size_to_header(file_name)
-        connection.send(file_size_encoded)
+# viết hàm một chức năng thôi 
+def send_content_to_server(client, name_file, file_size):
+    file = open(name_file,"rb")
+    while True:
+        #tạo thanh % t
+        numberOfRepeat =math.ceil(file_size/ BUFFER)
+        with alive_bar(numberOfRepeat, title="Downloading") as bar:
+            for _ in range(numberOfRepeat):
+                chunk = file.read(BUFFER)  
+                if not chunk:
+                    break  
+                client.send(chunk)
+                time.sleep(0.0000000005) 
+                bar()
+            break
+    received_message = client.recv(LENGTH_MESS).decode().strip()
+    if received_message == message_notenough :
+        send_content_to_server(client, name_file, file_size)
+    else: print('Đã gửi thành công.')
 
-        # Đọc và gửi file tới server
-        with open(file_name, 'rb') as file:
-            bytes_to_send = file.read(BUFFER_SIZE)
-            while bytes_to_send:
-                print(bytes_to_send)
-                connection.send(bytes_to_send)
-                bytes_to_send = file.read(BUFFER_SIZE)
-        print(f"Đã tải file {file_name} lên server thành công.")
+def process_name_file(path_file):
+    processed_name_file = path_file
+    i = 1
+    while os.path.exists(processed_name_file):
+        name, extension = os.path.splitext(path_file) 
+        processed_name_file = f"{name}({i}){extension}"
+        i += 1
+    print('Dia chi file o server', processed_name_file)
+    return processed_name_file
+
+def get_content(connection, name_file_processed, file_size):
+    #Lấy nội dung file
+    with open(name_file_processed, 'ab') as f:
+        received_data = 0
+        while received_data < file_size:
+            data = connection.recv(BUFFER)
+            if not data:
+                if received_data < file_size:
+                    connection.send(message_notenough.ljust(LENGTH_MESS,' ').encode())
+                    os.remove(name_file_processed)
+                    # connection.close()
+                print('Het data')
+                break
+            received_data += len(data)
+            f.write(data)
+        if received_data == file_size: 
+            connection.send(message_enough.ljust(LENGTH_MESS,' ').encode())
+
+def download_from_server(client, path_name):
+    client.send(path_name.ljust(BUFFER).encode())
+    received_message = client.recv(LENGTH_MESS).decode().strip()
+    print(received_message)
+    if(received_message == message_success):
+        processed_file_name = process_name_file(path_name)
+        file_size = int(client.recv(LENGTH_SIZE).decode().strip())
+        get_content(client, processed_file_name, file_size)
     else:
-        print("File không tồn tại.")
-
-# # Function to download file
-# def download_file(connection, file_name):
-#     connection.send('download'.encode(ENCODING))
-#     connection.send(file_name.encode(ENCODING))
-    
-#     # Nhận phản hồi từ server
-#     response = connection.recv(13).decode(ENCODING)
-    
-#     if response == 'SUCCESSFULLY.':
-#         # Nhận kích thước file
-#         file_size = int(connection.recv(1024).decode(ENCODING))
-#         print(f"Đang tải file {file_name} với kích thước {file_size} bytes.")
-        
-#         # Nhận và lưu file
-#         with open(f"downloaded_{file_name}", 'wb') as file:
-#             bytes_received = 0
-#             while bytes_received < file_size:
-#                 data = connection.recv(BUFFER_SIZE)
-#                 if not data:
-#                     break
-#                 file.write(data)
-#                 bytes_received += len(data)
-#         print(f"Đã tải file {file_name} xuống thành công.")
-#     else:
-#         print("File không tồn tại trên server.")
-
-# Function to connect to server
-def connect_to_server():
-    client_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-    client_socket.connect((HOST_SERVER, PORT_SERVER))
-    print("Đã kết nối tới server.")
+        print('file khong ton tai tren server')
 
 
-    mode = input("Nhập chế độ (upload/download): ").strip().lower()
+def main():
+    client = init_client()
+    mode =input('Input mode: ') # chưa có download
 
     if mode == 'upload':
-        file_name = input("Nhập tên file để tải lên server: ").strip()
-        upload_file(client_socket, file_name)
-    # elif mode == 'download':
-    #     file_name = input("Nhập tên file để tải xuống server: ").strip()
-    #     download_file(client_socket, file_name)
+        name_file = input("Input name file to upload:")
+        client.send(mode.encode())
+        file_size = send_path_and_size(client, name_file)
+        send_content_to_server(client,name_file,file_size)
+
+    elif mode == 'download':
+        path_file = input("Input name file to download: ")
+        client.send(mode.encode())
+        download_from_server(client, path_file)
     else:
-        print("Chế độ không hợp lệ.")
-    # ???
-    client_socket.close()
+        print('Sai mode')
+
+
+    
 if __name__ == '__main__':
-    connect_to_server()
+    main()
