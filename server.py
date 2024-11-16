@@ -3,69 +3,75 @@ import threading
 import os
 
 ENCODING = 'utf-8'
-PORT_SERVER = 5051  # Sửa từ chuỗi thành số nguyên
+PORT_SERVER = 5052
 HOST_SERVER = socket.gethostbyname(socket.gethostname())
+LENGTH = 16
+BUFFER = 1024
 
-def send_file(connection, file_name):
-    # Gửi kích thước file
-    file_size = os.path.getsize(file_name)
-    connection.send(str(file_size).encode(ENCODING))
+# def send_file(connection, file_name):
+#     # Gửi kích thước file
+#     file_size = os.path.getsize(file_name)
+#     connection.send(str(file_size).encode(ENCODING))
 
-    # Gửi nội dung file
-    with open(file_name, 'rb') as file:
-        bytes_to_send = file.read(1024)
-        while bytes_to_send:
-            connection.send(bytes_to_send)
-            bytes_to_send = file.read(1024)
+#     # Gửi nội dung file
+#     with open(file_name, 'rb') as file:
+#         bytes_to_send = file.read(BUFFER)
+#         while bytes_to_send:
+#             connection.send(bytes_to_send)
+#             bytes_to_send = file.read(BUFFER)
 
-# Respone mode download
-def respone_download(connection):
-    file_name = connection.recv(1024).decode(ENCODING).strip()
-    print(f'Yêu cầu nhận file: {file_name}')
+# # Response mode download
+# def response_download(connection):
+#     file_name = connection.recv(BUFFER).decode(ENCODING).strip()
+#     print(f'Yêu cầu nhận file: {file_name}')
     
-    # Kiểm tra sự tồn tại của file
-    if os.path.isfile(file_name):
-        connection.send('SUCCESSFULLY.'.encode(ENCODING))
-        send_file(connection, file_name)  # send file from server
-        print('Đã gửi file thành công.')
-    else:
-        connection.send('ERRORNOTFOUND'.encode(ENCODING))
-        print('File không tồn tại.')
+#     # Kiểm tra sự tồn tại của file
+#     if os.path.isfile(file_name):
+#         connection.send('SUCCESSFULLY.'.encode(ENCODING))
+#         send_file(connection, file_name)  # send file from server
+#         print('Đã gửi file thành công.')
+#     else:
+#         connection.send('ERRORNOTFOUND'.encode(ENCODING))
+#         print('File không tồn tại.')
     
-    connection.close()
+#     connection.close()
 
 # Process name file to upload
-def procees_file_name(file_name):
+def process_file_name(file_name):
     i = 1
-    while os.path.isfile(file_name):
-        file_name = f'{file_name}({i})'
+    processed_file_name = file_name
+    while os.path.isfile(processed_file_name):
+        processed_file_name = file_name.replace('.', f'({i}).')
         i += 1
-    return file_name
+    return processed_file_name
 
-# Respone mode upload
-def respone_upload(connection):
-    file_name = connection.recv(1024).decode(ENCODING).strip()
-    file_name = procees_file_name(file_name)
-    file_size = int(connection.recv(16).decode(ENCODING).strip())
-    
-    data_received = 0
-    with open(file_name, 'ab') as file:
-        while True:
-            data = connection.recv(1024)
-            if not data:
-                break
-            file.write(data)
-            data_received += len(data)
-    
-    if data_received == file_size:
-        print('OK')
-        connection.send('ENOUGH       '.encode(ENCODING))
-    else:
-        print('Khong OK')
-        # os.remove(file_name)
-        connection.send('NOTENOUGH    '.encode(ENCODING))
+def response_upload(connection):
+    file_name = connection.recv(BUFFER).decode(ENCODING)
+    print('file name', file_name)
+    if not file_name:
+        print('Khong nhan duoc')
+        return
+    file_name = process_file_name(file_name)
+    file_size = connection.recv(LENGTH).decode(ENCODING).strip()
+    if file_size:
+        file_size = int(file_size)
+        print(file_name)
+        print(file_size)
+        file = open(file_name, 'wb')
+        if file:
+            received_data = 0
+            while received_data < file_size:
+                data = connection.recv(BUFFER)
+                if not data:
+                    if received_data < file_size:
+                        print('Het data')
+                        break
+                received_data += len(data)
+                file.write(data)
+        
 
-# Init server
+
+ # Init server
 def init_server(host, port):
     server_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     server_socket.bind((host, port))  # Truyền host, port
@@ -74,7 +80,7 @@ def init_server(host, port):
     return server_socket
 
 def handle(connection):
-    return connection.recv(1024).decode(ENCODING).strip()  # Đọc mode với kích thước 1024 byte
+    return connection.recv(8).decode(ENCODING).strip()  # Đọc mode với kích thước BUFFER byte
 
 # Server listening
 def listening(server_socket):
@@ -85,16 +91,20 @@ def listening(server_socket):
         # Init thread for client
         mode = handle(conn)
         print('mode', mode)
+        # test with 1 thread 
         if mode == 'upload':
-            thread = threading.Thread(target=respone_upload, args=(conn,))
-        elif mode == 'download':
-            thread = threading.Thread(target=respone_download, args=(conn,))
-        thread.start()
+            thread = threading.Thread(target=response_upload, args=(conn,))
+            thread.start()
+            # response_upload(conn)
+        # elif mode == 'download':
+        #    # thread = threading.thread(target=respone_download, args=(conn,))
+        #    response_download(conn)
+        
 
 def main():        
     print(HOST_SERVER)
     server_socket = init_server(HOST_SERVER, PORT_SERVER)
-    listening(server_socket=server_socket)
+    listening(server_socket)
 
 if __name__ == '__main__':
     main()
