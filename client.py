@@ -43,23 +43,26 @@ def enter_password(client):
                 client.send(password.ljust(LENGTH_SIZE).encode(ENCODING))  # Đảm bảo mật khẩu có đủ độ dài
                 break
             else:
-                print(message)
+                print('what', message)
 
 
 
 def enter_pin(client):
     message = client.recv(LENGTH_MESS).decode().strip()
-    print(message)
+    print('dsad', message)
     while True:
         if message == message_setup_first_pin:
             initpin = input('Khoi tao pin: ')
             client.send(initpin.ljust(LENGTH_SIZE).encode(ENCODING))  # Đảm bảo pin có đủ độ dài
             message = client.recv(LENGTH_MESS).decode().strip()
-        if message == message_success:
+        elif message == message_success:
             pin = input('Nhap vao pin: ')
             client.send(pin.ljust(LENGTH_SIZE).encode(ENCODING))  # Đảm bảo pin có đủ độ dài
             break
-        else: print(message)
+        else: 
+            message = client.recv(LENGTH_MESS).decode().strip()
+            print(message)
+
 
 def process_login_upload(client): #xử lí đăng nhập
      # Gọi hàm nhập mật khẩu
@@ -67,12 +70,14 @@ def process_login_upload(client): #xử lí đăng nhập
 
             # Nhận phản hồi từ server
             message = client.recv(LENGTH_MESS).decode().strip()
-            print(message)
+            print('message', message)
 
-            while message == message_failure:
-                print('SAI PIN')
-                enter_pin(client)
-                message = client.recv(LENGTH_MESS).decode().strip()
+            while True:
+                if message == message_failure:
+                    print('SAI PIN')
+                    enter_pin(client)
+                    message = client.recv(LENGTH_MESS).decode().strip()
+                break
                 print('message', message)
                 # return None
 
@@ -82,7 +87,7 @@ def process_login_client(client): #xử lí đăng nhập
 
             # Nhận phản hồi từ server
             message = client.recv(LENGTH_MESS).decode().strip()
-            print(message)
+            print(' da', message)
 
             while message == message_failure:
                 print('SAI PASS WORD')
@@ -103,7 +108,7 @@ def init():
         return None
     except ConnectionRefusedError:
         print("The server is off !")
-    return None
+        return None
 
 
 #Nhập tên file
@@ -276,6 +281,7 @@ def get_content(client,name_file_and_path,file_size):
                 if received_size == file_size:
                     break
         if received_size == number_of_repeat: 
+                print('hello')
                 client.send(message_enough.ljust(LENGTH_MESS,' ').encode(ENCODING))
 
 

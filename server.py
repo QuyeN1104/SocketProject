@@ -76,6 +76,7 @@ def handle_client_connection(conn, addr):
                 else:
                     print('mode is not exist')
             except:
+                print('ERROR')
                 break
 
     except Exception as e:
