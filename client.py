@@ -64,7 +64,7 @@ def enter_pin(client):
             print(message)
 
 
-def process_login_upload(client): #xử lí đăng nhập
+def process_login_updownload(client): #xử lí đăng nhập
      # Gọi hàm nhập mật khẩu
             enter_pin(client)
 
@@ -156,12 +156,6 @@ def send_header_to_server(client, name_file,file):
     client.send(file_size_string.ljust(LENGTH_SIZE,' ').encode(ENCODING))
     return file_size
 
-
-#nhận dữ liệu từ server
-def client_receive_signal(client):
-    return client.recv(9)
-
-
 #Gửi các dữ liệu qua server
 def send_data_to_upload(name_file,client):
     file = open(name_file,"rb")
@@ -180,11 +174,16 @@ def send_data_to_upload(name_file,client):
                 bar()
             break
     file.close()
+    message = client.recv(LENGTH_MESS).decode().strip()
+    if message == message_notenough:
+        print('gui that bai')
+    else:
+        print("The file error! Please upload file again")
 
 
 #Upload file
 def upload(client):
-    process_login_upload(client)
+    process_login_updownload(client)
     name_file = input_name_file()
     if os.path.exists(name_file):
         try:
@@ -287,6 +286,8 @@ def get_content(client,name_file_and_path,file_size):
 
 #Hàm chính download
 def download(client):
+    process_login_updownload(client)
+
     name_file = input("Input name file to download:")
     name_path_file = ""
     try:

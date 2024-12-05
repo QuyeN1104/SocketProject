@@ -2,7 +2,8 @@ import socket
 import os
 import threading
 import logging
-import time
+from pathlib import Path
+import json
 
 ENCODING = 'utf-8'
 PORT_SERVER = 9999
@@ -69,9 +70,10 @@ def handle_client_connection(conn, addr):
                 # Xử lý mode
                 if mode == 'upload':
                     response_upload(conn)  # Xử lý upload
-                elif mode == 'download':
+                if mode == 'download':
+                    print('ok')
                     response_download(conn)  # Xử lý download
-                elif mode == 'exit':
+                if mode == 'exit':
                     break
                 else:
                     print('mode is not exist')
@@ -113,8 +115,12 @@ def response_upload(connection):
 def response_download(connection):
     #Nhan path file
     try:
-        process_login_updownload(connection, connection.getpeername[0])
-        new_path = get_name_file_processed
+        print('hello')
+        process_login_updownload(connection, connection.getpeername()[0])
+        send_directories_and_files(connection)
+        new_path = connection.recv(BUFFER).decode().strip()
+        new_path = get_path_of_server(new_path,connection.getpeername()[0])
+        print(new_path)
         response_download_support(connection, new_path)
     except ConnectionResetError:
         print("Client disconnected unexpectedly.")
@@ -154,6 +160,7 @@ def response_download_support(connection, new_path):
         else:
             connection.send(message_error_notfound.ljust(LENGTH_MESS).encode(ENCODING))
             print('file không tồn tại')
+
         mess_from_client = connection.recv(LENGTH_MESS).decode().strip()
 
         # nếu gửi lại mãi mà vẫn không được thì sao ???? 
@@ -246,7 +253,7 @@ def process_login_client(conn):
     try:
         is_validated_client =  validate_client( conn)
         while not is_validated_client:
-            conn.send(message_failure.ljust(LENGTH_MODE).encode(ENCODING))
+            conn.send(message_failure.ljust(LENGTH_MESS).encode(ENCODING))
             is_validated_client = validate_client(conn)
         conn.send(message_success.ljust(LENGTH_MESS).encode())
     except:
@@ -256,7 +263,7 @@ def process_login_updownload(conn, response_ip):
     try:
         is_validated_client =  validate_client_when_updownload( conn, response_ip)
         while not is_validated_client:
-            conn.send(message_failure.ljust(LENGTH_MODE).encode(ENCODING))
+            conn.send(message_failure.ljust(LENGTH_MESS).encode(ENCODING))
             is_validated_client = validate_client_when_updownload(conn, response_ip)
         conn.send(message_success.ljust(LENGTH_MESS).encode())
     except:
@@ -335,6 +342,7 @@ def get_name_file_processed(connection):
         name_file = connection.recv(BUFFER).decode().strip()
         print(name_file)
         new_path = get_path_of_server(name_file,connection.getpeername()[0])
+        print(new_path)
         #Xu li name file
         name_file_processed = process_name_file(new_path)
         return(name_file_processed)
@@ -355,9 +363,10 @@ def process_name_file(path_file):
 # tạo vị trí mới khi nhận file (chưa tinh chỉnh để không bị trùng)
 def get_path_of_server(src,client_ip):
     file_name = os.path.basename(src)
+    print(file_name)
     os.makedirs(data_server_folder + '/' + str(client_ip),exist_ok=True)
     new_path = data_server_folder + '/' + str(client_ip) + '/' + file_name
-    return new_path
+    return(new_path)
 
 #nhận nội dung
 def get_content(connection, name_file_processed, file_size):
@@ -373,14 +382,36 @@ def get_content(connection, name_file_processed, file_size):
                 break
             received_data += len(data)
             f.write(data)
-        connection.send(message_enough.ljust(LENGTH_MESS,' ').encode(ENCODING))
+        if(received_data == file_size):
+            connection.send(message_enough.ljust(LENGTH_MESS,' ').encode(ENCODING))
 
 
+def get_directories_and_files(parent_dir):
+    result = {}
+    parent_path = Path(parent_dir)
 
+    # Kiểm tra nếu thư mục gốc tồn tại
+    if parent_path.exists() and parent_path.is_dir():
+        # Lặp qua các thư mục con trực tiếp trong thư mục gốc
+        for dir_path in parent_path.iterdir():
+            if dir_path.is_dir():
+                result[dir_path.name] = []
+
+                # Lấy danh sách các tệp trong thư mục con
+                for file_path in dir_path.iterdir():
+                    if file_path.is_file():
+                        result[dir_path.name].append(file_path.name)    
+    return json.dumps(result)
+
+def send_directories_and_files(connection):
+    connection.send(get_directories_and_files(data_server_folder).ljust(BUFFER).encode(ENCODING))
 
 def main():
     server_socket = init_server()
     listening(server_socket)
+    # info = get_directories_and_files(data_server_folder)
+    # print(info)
+
     
 if __name__ == '__main__':
     main()
