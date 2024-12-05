@@ -33,26 +33,33 @@ def enter_password(client):
         message = client.recv(LENGTH_MESS).decode().strip()
         print(message)
 
-        while message == message_setup_first_pass_word:
-            initpassword = input('Khoi tao password: ')
-            client.send(initpassword.ljust(LENGTH_SIZE).encode(ENCODING))  # Đảm bảo mật khẩu có đủ độ dài
-            message = client.recv(LENGTH_MESS).decode().strip()
-        if message != message_setup_first_pass_word:
-            password = input('Nhap vao pass word: ')
-            client.send(password.ljust(LENGTH_SIZE).encode(ENCODING))  # Đảm bảo mật khẩu có đủ độ dài
+        while True:
+            if message == message_setup_first_pass_word:
+                initpassword = input('Khoi tao password: ')
+                client.send(initpassword.ljust(LENGTH_SIZE).encode(ENCODING))  # Đảm bảo mật khẩu có đủ độ dài
+                message = client.recv(LENGTH_MESS).decode().strip()
+            if message == message_success:
+                password = input('Nhap vao pass word: ')
+                client.send(password.ljust(LENGTH_SIZE).encode(ENCODING))  # Đảm bảo mật khẩu có đủ độ dài
+                break
+            else:
+                print(message)
 
 
 
 def enter_pin(client):
     message = client.recv(LENGTH_MESS).decode().strip()
     print(message)
-
-    while message == message_setup_first_pin:
-        initpin = input('Khoi tao pin: ')
-        client.send(initpin.ljust(LENGTH_SIZE).encode(ENCODING))  # Đảm bảo pin có đủ độ dài
-    if message != message_setup_first_pin:
-        pin = input('Nhap vao pin: ')
-        client.send(pin.ljust(LENGTH_SIZE).encode(ENCODING))  # Đảm bảo pin có đủ độ dài
+    while True:
+        if message == message_setup_first_pin:
+            initpin = input('Khoi tao pin: ')
+            client.send(initpin.ljust(LENGTH_SIZE).encode(ENCODING))  # Đảm bảo pin có đủ độ dài
+            message = client.recv(LENGTH_MESS).decode().strip()
+        if message == message_success:
+            pin = input('Nhap vao pin: ')
+            client.send(pin.ljust(LENGTH_SIZE).encode(ENCODING))  # Đảm bảo pin có đủ độ dài
+            break
+        else: print(message)
 
 def process_login_upload(client): #xử lí đăng nhập
      # Gọi hàm nhập mật khẩu

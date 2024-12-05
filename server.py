@@ -7,6 +7,7 @@ import time
 ENCODING = 'utf-8'
 PORT_SERVER = 9999
 HOST_SERVER = socket.gethostbyname(socket.gethostname())
+print(HOST_SERVER)
 ADDRESS_SERVER = (HOST_SERVER, PORT_SERVER)
 LENGTH_SIZE = 16 #16 bytes để truyền kích thước file
 LENGTH_MODE = 16 # 8 bytes để đọc mode
@@ -166,9 +167,9 @@ def set_pass_word_for_first_time(conn):
         while True:
             _pass_word = conn.recv(LENGTH_SIZE).decode().strip()
             print(_pass_word)
-            if  _pass_word.isdigit(): break
+            if  _pass_word.isdigit() == False: conn.send(message_setup_first_pass_word.ljust(LENGTH_MESS).encode(ENCODING))
             else: 
-                conn.send(message_setup_first_pass_word.ljust(LENGTH_MESS).encode(ENCODING))
+                break
 
         with open(pass_word_path,'w') as file:
             file.write(_pass_word)
@@ -186,7 +187,10 @@ def get_pass_word(conn):
             os.close(fd)
         if os.path.getsize(pass_word_path) == 0:
             conn.send(message_setup_first_pass_word.ljust(LENGTH_MESS).encode(ENCODING))
-            return(set_pass_word_for_first_time(conn))
+            initpassword = set_pass_word_for_first_time(conn)
+            conn.send(message_success.ljust(LENGTH_MESS).encode(ENCODING))
+            return initpassword
+
         else: 
             conn.send(message_success.ljust(LENGTH_MESS).encode(ENCODING))
 
@@ -286,7 +290,9 @@ def get_pin(conn,response_ip):
         if os.path.getsize(pin_path) == 0:
             if(response_ip == conn.getpeername()[0]):
                 conn.send(message_setup_first_pin.ljust(LENGTH_MESS).encode(ENCODING))
-                return(set_pin_for_first_time(conn,response_ip))
+                initpin = set_pin_for_first_time(conn,response_ip)
+                conn.send(message_success.ljust(LENGTH_MESS).encode(ENCODING))
+                return(initpin)
         else: 
             conn.send(message_success.ljust(LENGTH_MESS).encode(ENCODING))
 
