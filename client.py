@@ -7,11 +7,13 @@ import concurrent.futures
 import sys
 import threading
 from concurrent.futures import ThreadPoolExecutor
+
+
 LENGTH_NUMBER_OF_FILE = 10
 LENGTH_NAME = 1024
 ENCODING = 'utf-8'
 LENGTH_SIZE = 16 #16 bytes để truyền kích thước file
-LENGTH_MODE = 8  # 8 bytes để đọc mode
+LENGTH_MODE = 16  # 8 bytes để đọc mode
 LENGTH_MESS = 16 # 13 bytes tín hiệu phản hồi lại bên gửi
 SIZE = 16
 PORT_SERVER = 9999
@@ -27,30 +29,28 @@ stop_signal = "NOTENOUGH"
 message_setup_first_pass_word = 'SETUP_pass_word'
 message_setup_first_pin = 'SETUP_PIN'
 
-def add_padding(data, sum_byte):
-    if len(data) == sum_byte:
-        return data
-    return data + ' ' * (sum_byte - len(data))
-
 def enter_password(client):
-    message = client.recv(LENGTH_MESS).decode().strip()
-    print(message)
+        message = client.recv(LENGTH_MESS).decode().strip()
+        print(message)
 
-    if message == message_setup_first_pass_word:
-        initpassword = input('Khoi tao password: ')
-        client.send(initpassword.ljust(LENGTH_SIZE).encode(ENCODING))  # Đảm bảo mật khẩu có đủ độ dài
-    else:
-        password = input('Nhap vao pass word: ')
-        client.send(password.ljust(LENGTH_SIZE).encode(ENCODING))  # Đảm bảo mật khẩu có đủ độ dài
+        while message == message_setup_first_pass_word:
+            initpassword = input('Khoi tao password: ')
+            client.send(initpassword.ljust(LENGTH_SIZE).encode(ENCODING))  # Đảm bảo mật khẩu có đủ độ dài
+            message = client.recv(LENGTH_MESS).decode().strip()
+        if message != message_setup_first_pass_word:
+            password = input('Nhap vao pass word: ')
+            client.send(password.ljust(LENGTH_SIZE).encode(ENCODING))  # Đảm bảo mật khẩu có đủ độ dài
+
+
 
 def enter_pin(client):
     message = client.recv(LENGTH_MESS).decode().strip()
     print(message)
 
-    if message == message_setup_first_pin:
+    while message == message_setup_first_pin:
         initpin = input('Khoi tao pin: ')
         client.send(initpin.ljust(LENGTH_SIZE).encode(ENCODING))  # Đảm bảo pin có đủ độ dài
-    else:
+    if message != message_setup_first_pin:
         pin = input('Nhap vao pin: ')
         client.send(pin.ljust(LENGTH_SIZE).encode(ENCODING))  # Đảm bảo pin có đủ độ dài
 
@@ -84,14 +84,42 @@ def process_login_client(client): #xử lí đăng nhập
                 # return None
 
 
+#Khởi tạo kết nối server
 def init():
-        try:
-            client = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-            client.connect(ADDRESS_SERVER)
-            # process_login_client(client)
-            return client  # Mật khẩu đúng, kết nối thành công
-        except Exception as e:
-            print(f"Error: {e}")
+    client = socket.socket(socket.AF_INET,socket.SOCK_STREAM)
+    try:
+        client.connect(ADDRESS_SERVER)
+        process_login_client(client)
+        return client
+    except socket.gaierror:
+        print("The address server is invalid !")
+        return None
+    except ConnectionRefusedError:
+        print("The server is off !")
+    return None
+
+
+#Nhập tên file
+def input_name_file():
+    name_file = input("Input name file: ")
+    while True:
+        if os.path.exists(name_file):
+            return name_file
+        else:
+            print("The name file is not exist!")
+            name_file = input("Input the new name file: ")
+
+
+#Nhập tên folder
+def input_name_folder():
+    name_file = input("Input name folder: ")
+    while True:
+        if os.path.exists(name_file):
+            return name_file
+        else:
+            print("The name folder is not exist!")
+            name_file = input("Input the new name folder: ")
+
 
 #xử lí tên đường dẫn để lấy tên file
 def cut_name_in_path(name_file):
@@ -106,6 +134,7 @@ def cut_name_in_path(name_file):
     name_result = name_file[positive_last_slash+1:len(name_file)]
     return name_result
 
+
 #xử lý lấy tổng dung lượng file và gửi dung lượng file
 def send_header_to_server(client, name_file,file):
     file_size = os.path.getsize(name_file)
@@ -115,19 +144,22 @@ def send_header_to_server(client, name_file,file):
     client.send(file_size_string.ljust(LENGTH_SIZE,' ').encode(ENCODING))
     return file_size
 
+
 #nhận dữ liệu từ server
 def client_receive_signal(client):
     return client.recv(9)
+
 
 #Gửi các dữ liệu qua server
 def send_data_to_upload(name_file,client):
     file = open(name_file,"rb")
     file_size = send_header_to_server(client, name_file,file)
+    name_file_no_path = cut_name_in_path(name_file)
     while True:
         #tạo thanh % t
-        numberOfRepeat =math.ceil(file_size/ BUFFER)
-        with alive_bar(numberOfRepeat, title="Downloading") as bar:
-            for _ in range(numberOfRepeat):
+        number_of_repeat =math.ceil(file_size/ BUFFER)
+        with alive_bar(number_of_repeat, title=f"Upload {name_file_no_path}") as bar:
+            for _ in range(number_of_repeat):
                 chunk = file.read(BUFFER)  
                 if not chunk:
                     break  
@@ -136,11 +168,22 @@ def send_data_to_upload(name_file,client):
                 bar()
             break
     file.close()
+
+
 #Upload file
 def upload(client):
     process_login_upload(client)
-    name_file = input("Input name file or path to upload:")
-    send_data_to_upload(name_file,client)
+    name_file = input_name_file()
+    if os.path.exists(name_file):
+        try:
+            send_data_to_upload(name_file,client)
+        except ConnectionResetError:
+            print("The server suddenly disconnect!")
+    else:
+        print("File is not exist")
+
+
+#Gửi dữ liệu không có thanh tiến trình
 def send_data_to_upload_not_bar(name_file):
     client = init()
     mode = "upload" 
@@ -156,46 +199,55 @@ def send_data_to_upload_not_bar(name_file):
     print(name_file + " successful download.")
 
 
+#Gửi dữ liệu đa luồng của folder
 def upload_multithreaded():
-    name_folder = input("Input name path folder:")
-    list_file = os.listdir(name_folder)
-    threads = []
-    for file in list_file:
-        name_file_path = name_folder + "\\" + file
-        thread = threading.Thread(target = send_data_to_upload_not_bar,args = (name_file_path,))
-        thread.start()
-        threads.append(thread)
-    for thread in threads:
-        thread.join()
+    name_folder = input_name_folder()
+    if os.path.exists:
+        list_file = os.listdir(name_folder)
+        threads = []
+        for file in list_file:
+            name_file_path = name_folder + "\\" + file
+            thread = threading.Thread(target = send_data_to_upload_not_bar,args = (name_file_path,))
+            thread.start()
+            threads.append(thread)
+        for thread in threads:
+            thread.join()
+    else:
+        print("Folder is not exist")
 
 
-
+#Gửi dữ liệu lần lượt folder
 def upload_orderly(client):
-    name_folder = input("Input name path folder:")
-    list_file = os.listdir(name_folder)
-    number_of_file = str(len(list_file))
-    client.send(number_of_file.ljust(LENGTH_NUMBER_OF_FILE,' ').encode(ENCODING))
-    for name_file in list_file:
-        print("Upload file " + name_file)
-        name_file_path = name_folder + "\\" + name_file
-        send_data_to_upload(name_file_path,client)
+    name_folder = input_name_folder()
+    if os.path.exists(name_folder):
+        try:
+            list_file = os.listdir(name_folder)
+            number_of_file = str(len(list_file))
+            client.send(number_of_file.ljust(LENGTH_NUMBER_OF_FILE,' ').encode(ENCODING))
+            for name_file in list_file:
+                name_file_path = name_folder + "\\" + name_file
+                send_data_to_upload(name_file_path,client)
+        except ConnectionResetError:
+            print("The server suddenly disconnect!")
+    else:
+        print("Folder is not exist")
 
 
-
+#tìm đường dẫn để lưu file
 def find_path_to_save_file(name_path,name_file):
     name_path_and_file = name_path
     if name_path_and_file[len(name_path_and_file)-1] == '/':
         name_path_and_file += name_file
     else:
         name_path_and_file =name_path_and_file+ "/" +name_file
-
     if os.path.exists(name_path_and_file) == True:
         os.remove(name_path_and_file)
-
     file = open(name_path_and_file,"x")
     file.close()
     return name_path_and_file
 
+
+#Lấy nội dung từ client
 def get_content(client,name_file_and_path,file_size):
     received_size = 0
     with open(name_file_and_path,"ab") as file:
@@ -206,7 +258,7 @@ def get_content(client,name_file_and_path,file_size):
                 bytes_to_write = min(len(data), file_size - received_size)
                 file.write(data[:bytes_to_write])
                 received_size += bytes_to_write
-                time.sleep( ) 
+                time.sleep(0.0000000005) 
                 bar()
                 if not data:
                     if received_size < number_of_repeat:
@@ -219,34 +271,49 @@ def get_content(client,name_file_and_path,file_size):
         if received_size == number_of_repeat: 
                 client.send(message_enough.ljust(LENGTH_MESS,' ').encode(ENCODING))
 
+
+#Hàm chính download
 def download(client):
     name_file = input("Input name file to download:")
-    name_path = input("Input path file to save: ")
-    name_path_file = find_path_to_save_file(name_path,name_file)
-    client.send(name_file.ljust(BUFFER,' ').encode(ENCODING))
-    message = client.recv(LENGTH_MESS).decode().strip()
-    if message == message_success:
-        file_size = int(client.recv(LENGTH_SIZE).decode().strip())
-        get_content(client,name_path_file,file_size)
-        client.close()
-    else:
-        print("The file doesn't exit in the server")
-        client.close()
-def choose_mode():
-    print(" ")
+    name_path_file = ""
+    try:
+        client.send(name_file.ljust(BUFFER,' ').encode(ENCODING))
+        message = client.recv(LENGTH_MESS).decode().strip()
+        if message == message_success:
+            name_path = input_name_folder()
+            name_path_file = find_path_to_save_file(name_path,name_file)
+            file_size = int(client.recv(LENGTH_SIZE).decode().strip())
+            get_content(client,name_path_file,file_size)
+        else:
+            print("The file doesn't exit in the server")
+    except ConnectionResetError:
+        print("The server suddenly disconnect!")
+        os.remove(name_path_file)
+
+def menu():
+    client = init()
+    if client:
+        while(True):
+            print("Menu mode: ")
+            print("1.upload")
+            print("2.download")
+            print("3.upload orderly")
+            print("4.upload multithread")
+            print("5.exit")
+            mode = input("Input:")
+            client.send(mode.ljust(LENGTH_MODE).encode(ENCODING))
+            if mode == "upload":
+                upload(client)
+            if mode == "download":
+                download(client)
+            if mode == "upload orderly":
+                upload_orderly(client)
+            if mode == "exit":
+                client.close()
+                break
+
 
 def main():
-    client = init()
-    #gửi mode
-    #upload
-    mode = "upload" 
-    client.send(mode.ljust(LENGTH_MODE).encode())
-    upload(client)
-    #download
-    # mode = "download" 
-    # client.send(mode.ljust(LENGTH_MODE).encode(ENCODING))
-    # download(client) 
-    # upload_orderly(client)
-    #upload_orderly(client)
+    menu()
 if __name__ == '__main__':
     main()

@@ -58,30 +58,35 @@ def listening(server_socket):
 #Xử lí kết nối với client
 def handle_client_connection(conn, addr):
     try:
-        # process_login_client(conn)
-        logging.info(f'{addr} connected')
+        process_login_client(conn) # xử lí đăng nhập 
+        while True:
+            try:
+                # Nhận mode (upload hoặc download)
 
-        # Nhận mode (upload hoặc download)
-        mode = conn.recv(LENGTH_MODE).decode().strip()
-
-        # Xử lý mode
-        if mode == 'upload':
-            response_upload(conn)  # Xử lý upload
-        elif mode == 'download':
-            response_download(conn)  # Xử lý download
-        else:
-            print('mode is not exist')
-            conn.close()
+                mode = conn.recv(LENGTH_MODE).decode().strip()
+                print('mode', mode)
+                # Xử lý mode
+                if mode == 'upload':
+                    response_upload(conn)  # Xử lý upload
+                elif mode == 'download':
+                    response_download(conn)  # Xử lý download
+                elif mode == 'exit':
+                    break
+                else:
+                    print('mode is not exist')
+            except:
+                break
 
     except Exception as e:
         print(f"Error handling client {addr}: {e}")
     finally:
+        print('end')
         conn.close()  # Đảm bảo kết nối được đóng sau khi hoàn tất xử lý
 
 
 def response_upload(connection):
     try:
-        process_login_upload(connection)
+        process_login_updownload(connection,connection.getpeername()[0])
         name_file_processed = get_name_file_processed(connection)
         #Nhan size
         try:
@@ -102,12 +107,11 @@ def response_upload(connection):
     except Exception as e:
         print(f"Unexpected error: {e}")
     finally:
-        logging.info('yeu cau upload da dong')
-        connection.close()
-
+        print('Finished')
 def response_download(connection):
     #Nhan path file
     try:
+        process_login_updownload(connection, connection.getpeername[0])
         new_path = get_name_file_processed
         response_download_support(connection, new_path)
     except ConnectionResetError:
@@ -117,8 +121,7 @@ def response_download(connection):
     except Exception as e:
         print(f"Unexpected error: {e}")
     finally:
-        print("Closing connection.")
-        connection.close()
+        print('Finished')
 
 
 #client
@@ -157,14 +160,22 @@ def response_download_support(connection, new_path):
 
 
 def set_pass_word_for_first_time(conn):
-    print('do ne')
-    pass_word_path = data_server_folder + '/' + str(conn.getpeername()[0]) + '/' + '_pass_word.txt'
-    conn.send(message_setup_first_pass_word.ljust(LENGTH_MESS).encode(ENCODING))
-    _pass_word = conn.recv(LENGTH_SIZE).decode().strip()
-    print(_pass_word)
-    with open(pass_word_path,'w') as file:
-        file.write(_pass_word)
-    return(_pass_word)
+    try:
+        print('do ne')
+        pass_word_path = data_server_folder + '/' + str(conn.getpeername()[0]) + '/' + '_pass_word.txt'
+        while True:
+            _pass_word = conn.recv(LENGTH_SIZE).decode().strip()
+            print(_pass_word)
+            if  _pass_word.isdigit(): break
+            else: 
+                conn.send(message_setup_first_pass_word.ljust(LENGTH_MESS).encode(ENCODING))
+
+        with open(pass_word_path,'w') as file:
+            file.write(_pass_word)
+        return(_pass_word)
+    except Exception as e:
+        print(f'ERROR : {e}')
+
 
 def get_pass_word(conn):
     pass_word_path = get_path_of_server("_pass_word.txt",conn.getpeername()[0])
@@ -174,6 +185,7 @@ def get_pass_word(conn):
             fd = os.open(pass_word_path, os.O_CREAT | os.O_WRONLY)
             os.close(fd)
         if os.path.getsize(pass_word_path) == 0:
+            conn.send(message_setup_first_pass_word.ljust(LENGTH_MESS).encode(ENCODING))
             return(set_pass_word_for_first_time(conn))
         else: 
             conn.send(message_success.ljust(LENGTH_MESS).encode(ENCODING))
@@ -195,37 +207,86 @@ def validate_client(conn):
     try:
         addr = conn.getpeername()[0]
         valid_key = get_pass_word(conn)  # Khóa bí mật
-        # conn.settimeout(10000)
         valid_key = int(valid_key)
         key = conn.recv(LENGTH_SIZE).decode().strip()
+        if key.isdigit() == False:
+            print('Mat khau khong phai so')
+            return False
         key = int(key)
         if key != valid_key:
             print(f"Client at {addr} provided invalid key: {key}")
             return False
         return True
-    except Exception as e:
-        print(f"Validation failed for {addr}: {e}")
+    except :
         return False
 
-def set_pin_for_first_time(conn):
-    print('do ne')
-    pin_path = data_server_folder + '/' + str(conn.getpeername()[0]) + '/' + '_pin.txt'
-    conn.send(message_setup_first_pin.ljust(LENGTH_MESS).encode(ENCODING))
-    _pin = conn.recv(LENGTH_SIZE).decode().strip()
-    print(_pin)
-    with open(pin_path,'w') as file:
-        file.write(_pin)
-    return(_pin)
+    
+#Listening
+def listening_support(server_socket):
+        while True:
+            try:
+                print('Server is running: ')
+                conn, addr = server_socket.accept()
+                client_thread = threading.Thread(target=handle_client_connection, args=(conn, addr))
+                client_thread.start()
+            except ConnectionResetError as e:
+                print(f"Connection reset by client: {e}")
+            except socket.error as e:
+                print(f"Socket error: {e}")
+            except Exception as e:
+                print(f"Unexpected errore: {e}")
 
-def get_pin(conn):
-    pin_path = get_path_of_server("_pin.txt",conn.getpeername()[0])
+#xử lí thao tác nhập mã mat khau để dang nhap
+def process_login_client(conn):
+    try:
+        is_validated_client =  validate_client( conn)
+        while not is_validated_client:
+            conn.send(message_failure.ljust(LENGTH_MODE).encode(ENCODING))
+            is_validated_client = validate_client(conn)
+        conn.send(message_success.ljust(LENGTH_MESS).encode())
+    except:
+        return
+    
+def process_login_updownload(conn, response_ip):
+    try:
+        is_validated_client =  validate_client_when_updownload( conn, response_ip)
+        while not is_validated_client:
+            conn.send(message_failure.ljust(LENGTH_MODE).encode(ENCODING))
+            is_validated_client = validate_client_when_updownload(conn, response_ip)
+        conn.send(message_success.ljust(LENGTH_MESS).encode())
+    except:
+        return
+
+def set_pin_for_first_time(conn, response_ip):
+    try:
+        print('do ne')
+        pin_path = data_server_folder + '/' + str(response_ip) + '/' + '_pin.txt'
+        while True:
+            _pin = conn.recv(LENGTH_SIZE).decode().strip()
+            print(_pin)
+            if  _pin.isdigit(): break
+            else: 
+                conn.send(message_setup_first_pin.ljust(LENGTH_MESS).encode(ENCODING))
+
+        with open(pin_path,'w') as file:
+            file.write(_pin)
+        return(_pin)
+    except Exception as e:
+        print(f'ERROR : {e}')
+
+
+def get_pin(conn,response_ip):
+    pin_path = get_path_of_server("_pin.txt",response_ip)
     print(pin_path)
     try:
-        if not os.path.exists(pin_path):
-            fd = os.open(pin_path, os.O_CREAT | os.O_WRONLY)
-            os.close(fd)
+        if not os.path.exists(pin_path) :
+            if(response_ip == conn.getpeername()[0]):
+                fd = os.open(pin_path, os.O_CREAT | os.O_WRONLY)
+                os.close(fd)
         if os.path.getsize(pin_path) == 0:
-            return(set_pin_for_first_time(conn))
+            if(response_ip == conn.getpeername()[0]):
+                conn.send(message_setup_first_pin.ljust(LENGTH_MESS).encode(ENCODING))
+                return(set_pin_for_first_time(conn,response_ip))
         else: 
             conn.send(message_success.ljust(LENGTH_MESS).encode(ENCODING))
 
@@ -240,52 +301,26 @@ def get_pin(conn):
             else:
                 print("Dữ liệu trong file không phải số nguyên.")
     except Exception as e:
-        print(f"Đã xảy ra lỗi: {e}")    
+        print(f"Đã xảy ra lỗi: {e}")
 
-def validate_client_when_upload(conn):
+def validate_client_when_updownload(conn,response_ip):
     try:
         addr = conn.getpeername()[0]
-        valid_key = get_pin(conn)  # Khóa bí mật
-        print('khoa', valid_key)
-        # conn.settimeout(10000)
+        valid_key = get_pin(conn,response_ip)  # Khóa bí mật
         valid_key = int(valid_key)
         key = conn.recv(LENGTH_SIZE).decode().strip()
+        if key.isdigit() == False:
+            print('Ma pin khong phai so')
+            return False
         key = int(key)
         print('key', key)
+        print('valid_', valid_key)
         if key != valid_key:
             print(f"Client at {addr} provided invalid key: {key}")
             return False
         return True
-        print('giong pin')
-    except Exception as e:
-        print(f"Validation failed for {addr}: {e}")
+    except :
         return False
-#Listening
-def listening_support(server_socket):
-        logging.info("Server {HOST_SERVER} started and is listening for connections:...")
-        while True:
-            try:
-                conn, addr = server_socket.accept()
-                client_thread = threading.Thread(target=handle_client_connection, args=(conn, addr))
-                client_thread.start()
-            except ConnectionResetError as e:
-                print(f"Connection reset by client: {e}")
-            except socket.error as e:
-                print(f"Socket error: {e}")
-            except Exception as e:
-                print(f"Unexpected errore: {e}")
-#xử lí thao tác nhập mã mat khau để dang nhap
-def process_login_client(conn):
-        addr = conn.getpeername()[0]
-        is_validated_client =  validate_client( conn)
-        while not is_validated_client:
-            print(f"Connection from {addr} rejected due to failed validation.")
-            conn.send(message_failure.ljust(LENGTH_MESS).encode())
-            is_validated_client = validate_client(conn)
-            # conn.close()
-            # return
-
-        conn.send(message_success.ljust(LENGTH_MESS).encode())
 
 # hàm trả về địa chỉ của file trên server (đã thêm cơ số phía sau)
 def get_name_file_processed(connection):
@@ -297,17 +332,6 @@ def get_name_file_processed(connection):
         name_file_processed = process_name_file(new_path)
         return(name_file_processed)
 
-#xử lí thao tác nhập mã pin khi upload
-def process_login_upload(conn):
-        addr = conn.getpeername()[0]
-        is_validated_client =  validate_client_when_upload(conn)
-        while not is_validated_client:
-            print(f"Connection from {addr} rejected due to failed validation.")
-            conn.send(message_failure.ljust(LENGTH_MESS).encode())
-            is_validated_client = validate_client_when_upload(conn)
-            # conn.close()
-            # return
-        conn.send(message_success.ljust(LENGTH_MESS).encode())
 
         
 # tránh trùng tên
