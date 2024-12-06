@@ -10,7 +10,7 @@ from concurrent.futures import ThreadPoolExecutor
 
 
 LENGTH_NUMBER_OF_FILE = 10
-LENGTH_NAME = 1024
+LENGTH_NAME = 16
 ENCODING = 'utf-8'
 LENGTH_SIZE = 16 #16 bytes để truyền kích thước file
 LENGTH_MODE = 16  # 8 bytes để đọc mode
@@ -177,8 +177,6 @@ def send_data_to_upload(name_file,client):
     message = client.recv(LENGTH_MESS).decode().strip()
     if message == message_notenough:
         print('gui that bai')
-    else:
-        print("The file error! Please upload file again")
 
 
 #Upload file
@@ -285,24 +283,26 @@ def get_content(client,name_file_and_path,file_size):
 
 
 #Hàm chính download
-def download(client):
-    process_login_updownload(client)
-
-    name_file = input("Input name file to download:")
-    name_path_file = ""
-    try:
-        client.send(name_file.ljust(BUFFER,' ').encode(ENCODING))
-        message = client.recv(LENGTH_MESS).decode().strip()
-        if message == message_success:
-            name_path = input_name_folder()
-            name_path_file = find_path_to_save_file(name_path,name_file)
-            file_size = int(client.recv(LENGTH_SIZE).decode().strip())
-            get_content(client,name_path_file,file_size)
-        else:
-            print("The file doesn't exit in the server")
-    except ConnectionResetError:
-        print("The server suddenly disconnect!")
-        os.remove(name_path_file)
+def download(client,name_path,name_file,response_ip):
+    client.send(response_ip.ljust(LENGTH_NAME).encode(ENCODING))
+    message = client.recv(LENGTH_MESS).decode().strip()
+    if message == message_error_notfound:
+        print('Khong tim thay thu muc')
+    else: 
+        process_login_updownload(client)
+        name_path_file = ""
+        try:
+            client.send(name_file.ljust(BUFFER,' ').encode(ENCODING))
+            message = client.recv(LENGTH_MESS).decode().strip()
+            if message == message_success:
+                name_path_file = find_path_to_save_file(name_path,name_file)
+                file_size = int(client.recv(LENGTH_SIZE).decode().strip())
+                get_content(client,name_path_file,file_size)
+            else:
+                print("The file doesn't exit in the server")
+        except ConnectionResetError:
+            print("The server suddenly disconnect!")
+            os.remove(name_path_file)
 
 def menu():
     client = init()
@@ -319,7 +319,10 @@ def menu():
             if mode == "upload":
                 upload(client)
             if mode == "download":
-                download(client)
+                filename = input('chon file')
+                ip = input('thu muc')
+                path = input('noi luu')
+                download(client,path,filename,ip)
             if mode == "upload orderly":
                 upload_orderly(client)
             if mode == "exit":

@@ -11,6 +11,7 @@ HOST_SERVER = socket.gethostbyname(socket.gethostname())
 print(HOST_SERVER)
 ADDRESS_SERVER = (HOST_SERVER, PORT_SERVER)
 LENGTH_SIZE = 16 #16 bytes để truyền kích thước file
+LENGTH_NAME = 16 #16 bytes để truyền tên file
 LENGTH_MODE = 16 # 8 bytes để đọc mode
 LENGTH_MESS = 16 # 16 bytes tín hiệu phản hồi lại bên gửi
 LENGTH_NUMBER_OF_FILE = 10
@@ -75,8 +76,6 @@ def handle_client_connection(conn, addr):
                     response_download(conn)  # Xử lý download
                 if mode == 'exit':
                     break
-                else:
-                    print('mode is not exist')
             except:
                 print('ERROR')
                 break
@@ -115,13 +114,16 @@ def response_upload(connection):
 def response_download(connection):
     #Nhan path file
     try:
-        print('hello')
-        process_login_updownload(connection, connection.getpeername()[0])
-        send_directories_and_files(connection)
-        new_path = connection.recv(BUFFER).decode().strip()
-        new_path = get_path_of_server(new_path,connection.getpeername()[0])
-        print(new_path)
-        response_download_support(connection, new_path)
+        response_ip = connection.recv(LENGTH_NAME).decode().strip()
+        if os.path.exists(data_server_folder+'/'+str(response_ip)) == False:
+            connection.send(message_error_notfound.ljust(LENGTH_MESS).encode(ENCODING))
+        else: 
+            connection.send(message_success.ljust(LENGTH_MESS).encode(ENCODING))
+            process_login_updownload(connection, response_ip)
+            new_path = connection.recv(BUFFER).decode().strip()
+            new_path = get_path_of_server(new_path,response_ip)
+            print(new_path)
+            response_download_support(connection, new_path)
     except ConnectionResetError:
         print("Client disconnected unexpectedly.")
     except socket.error as e:
@@ -150,6 +152,7 @@ def response_download_support(connection, new_path):
             connection.send(message_success.ljust(LENGTH_MESS).encode(ENCODING))
             print('Tìm thấy file trên server')
             file_size = os.path.getsize(new_path) #lấy kích thước
+            print(file_size,"size")
             #gửi tên và kích thước
             connection.send(str(file_size).ljust(LENGTH_SIZE).encode(ENCODING))
             with open(new_path, 'rb') as f:
@@ -265,7 +268,7 @@ def process_login_updownload(conn, response_ip):
         while not is_validated_client:
             conn.send(message_failure.ljust(LENGTH_MESS).encode(ENCODING))
             is_validated_client = validate_client_when_updownload(conn, response_ip)
-        conn.send(message_success.ljust(LENGTH_MESS).encode())
+        conn.send(message_success.ljust(LENGTH_MESS).encode(ENCODING))
     except:
         return
 
@@ -275,7 +278,7 @@ def set_pin_for_first_time(conn, response_ip):
         pin_path = data_server_folder + '/' + str(response_ip) + '/' + '_pin.txt'
         while True:
             _pin = conn.recv(LENGTH_SIZE).decode().strip()
-            print(_pin)
+            print('dasd', _pin)
             if  _pin.isdigit(): break
             else: 
                 conn.send(message_setup_first_pin.ljust(LENGTH_MESS).encode(ENCODING))
@@ -292,15 +295,19 @@ def get_pin(conn,response_ip):
     print(pin_path)
     try:
         if not os.path.exists(pin_path) :
-            if(response_ip == conn.getpeername()[0]):
+            if response_ip == conn.getpeername()[0]:
                 fd = os.open(pin_path, os.O_CREAT | os.O_WRONLY)
                 os.close(fd)
+            else:
+                print('not bang')
         if os.path.getsize(pin_path) == 0:
-            if(response_ip == conn.getpeername()[0]):
+            if response_ip == conn.getpeername()[0]:
                 conn.send(message_setup_first_pin.ljust(LENGTH_MESS).encode(ENCODING))
                 initpin = set_pin_for_first_time(conn,response_ip)
                 conn.send(message_success.ljust(LENGTH_MESS).encode(ENCODING))
                 return(initpin)
+            else:
+                print('not bang 1')
         else: 
             conn.send(message_success.ljust(LENGTH_MESS).encode(ENCODING))
 
