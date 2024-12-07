@@ -12,10 +12,10 @@ from concurrent.futures import ThreadPoolExecutor
 LENGTH_NUMBER_OF_FILE = 10
 LENGTH_NAME = 16
 ENCODING = 'utf-8'
-LENGTH_SIZE = 16 #16 bytes để truyền kích thước file
-LENGTH_MODE = 16  # 8 bytes để đọc mode
-LENGTH_MESS = 16 # 13 bytes tín hiệu phản hồi lại bên gửi
-SIZE = 16
+LENGTH_SIZE = 32 #16 bytes để truyền kích thước file
+LENGTH_MODE = 32  # 8 bytes để đọc mode
+LENGTH_MESS = 32 # 13 bytes tín hiệu phản hồi lại bên gửi
+SIZE = 32
 PORT_SERVER = 9999
 HOST_SERVER = socket.gethostbyname(socket.gethostname())
 ADDRESS_SERVER = (HOST_SERVER, PORT_SERVER)
@@ -28,6 +28,8 @@ message_error_notfound = 'ERRORNOTFOUND'
 stop_signal = "NOTENOUGH"
 message_setup_first_pass_word = 'SETUP_pass_word'
 message_setup_first_pin = 'SETUP_PIN'
+message_login = "LOGIN"
+message_notlogin = "NOTLOGIN"
 
 def enter_password(client):
         message = client.recv(LENGTH_MESS).decode().strip()
@@ -97,11 +99,15 @@ def process_login_client(client): #xử lí đăng nhập
 
 
 #Khởi tạo kết nối server
-def init():
+def init(message):
     client = socket.socket(socket.AF_INET,socket.SOCK_STREAM)
     try:
         client.connect(ADDRESS_SERVER)
-        process_login_client(client)
+        ###
+        client.send(message.ljust(LENGTH_MESS).encode(ENCODING))
+        if message == message_login:
+            process_login_client(client)
+        
         return client
     except socket.gaierror:
         print("The address server is invalid !")
@@ -192,54 +198,26 @@ def upload(client):
         print("File is not exist")
 
 
-#Gửi dữ liệu không có thanh tiến trình
-def send_data_to_upload_not_bar(name_file):
-    client = init()
-    mode = "upload" 
-    client.send(mode.encode())
-    file = open(name_file,"rb")
-    send_header_to_server(client, name_file,file)
-    while True:
-        chunk = file.read(BUFFER)  
-        if not chunk:
-            break  
-        client.send(chunk)
-    file.close()
-    print(name_file + " successful download.")
 
 
-#Gửi dữ liệu đa luồng của folder
-def upload_multithreaded():
-    name_folder = input_name_folder()
-    if os.path.exists:
-        list_file = os.listdir(name_folder)
-        threads = []
-        for file in list_file:
-            name_file_path = name_folder + "\\" + file
-            thread = threading.Thread(target = send_data_to_upload_not_bar,args = (name_file_path,))
-            thread.start()
-            threads.append(thread)
-        for thread in threads:
-            thread.join()
-    else:
-        print("Folder is not exist")
 
 
-#Gửi dữ liệu lần lượt folder
-def upload_orderly(client):
-    name_folder = input_name_folder()
-    if os.path.exists(name_folder):
-        try:
-            list_file = os.listdir(name_folder)
-            number_of_file = str(len(list_file))
-            client.send(number_of_file.ljust(LENGTH_NUMBER_OF_FILE,' ').encode(ENCODING))
-            for name_file in list_file:
-                name_file_path = name_folder + "\\" + name_file
-                send_data_to_upload(name_file_path,client)
-        except ConnectionResetError:
-            print("The server suddenly disconnect!")
-    else:
-        print("Folder is not exist")
+# #Gửi dữ liệu lần lượt folder
+# def upload_orderly(client):
+#     process_login_updownload(client)
+#     name_folder = input_name_folder()
+#     if os.path.exists(name_folder):
+#         try:
+#             list_file = os.listdir(name_folder)
+#             number_of_file = str(len(list_file))
+#             client.send(number_of_file.ljust(LENGTH_NUMBER_OF_FILE,' ').encode(ENCODING))
+#             for name_file in list_file:
+#                 name_file_path = name_folder + "\\" + name_file
+#                 send_data_to_upload(name_file_path,client)
+#         except ConnectionResetError:
+#             print("The server suddenly disconnect!")
+#     else:
+#         print("Folder is not exist")
 
 
 #tìm đường dẫn để lưu file
@@ -304,8 +282,78 @@ def download(client,name_path,name_file,response_ip):
             print("The server suddenly disconnect!")
             os.remove(name_path_file)
 
+###
+#Gửi dữ liệu không có thanh tiến trình
+def send_data_multithreading(name_file):
+    client = init(message_notlogin)
+    mode = "upload multithread1" 
+    try:
+        client.send(mode.ljust(LENGTH_MODE).encode(ENCODING))
+        file = open(name_file,"rb")
+        send_header_to_server(client, name_file,file)
+        while True:
+            chunk = file.read(BUFFER)  
+            if not chunk:
+                break  
+            client.send(chunk)
+        file.close()
+        print(name_file + " successful download.")
+        message = client.recv(LENGTH_MESS).decode().strip()
+        if message == message_enough:
+            pass
+        else:
+            print("The file error! Please upload file again")
+        client.send('exit'.ljust(LENGTH_MODE).encode(ENCODING))
+        client.close()
+    except ConnectionResetError:
+            print("The server suddenly disconnect!")
+            print(f"{name_file} is not successful")
+            client.close()
+
+
+#Hàm đếm số luồng đã hoàn thành
+def count_thread_success(threads):
+    count = 0 
+    for thread in threads:
+        if not thread.is_alive():
+            count = count + 1
+    return count
+
+#Gửi dữ liệu đa luồng của folder
+def upload_multithreaded():
+    # nhập vào folder cần tải
+    try: 
+        name_folder = input_name_folder()
+        if os.path.exists:
+            list_file = os.listdir(name_folder)
+            threads = []
+            for file in list_file:
+                name_file_path = name_folder + "\\" + file
+                thread = threading.Thread(target = send_data_multithreading,args = (name_file_path,))
+                thread.start()
+                threads.append(thread)
+            #Hien5665 thanh bar
+            count_thread = 0
+            count_thread_current = 0
+            with alive_bar(len(list_file), title=f"Upload ") as bar:
+                while True:
+                    count_thread = count_thread_success(threads)
+                    if count_thread_current != count_thread:
+                        bar(count_thread - count_thread_current)
+                        count_thread_current = count_thread
+                    time.sleep(0.000000000000000005) 
+                    if count_thread == len(list_file):
+                        break
+            for thread in threads:
+                thread.join()
+        else:
+            print("Folder is not exist")
+    except ConnectionResetError:
+        print("The server suddenly disconnect!")
+
 def menu():
-    client = init()
+    client = init(message_login)
+    #cHƯA
     if client:
         while(True):
             print("Menu mode: ")
@@ -323,11 +371,17 @@ def menu():
                 ip = input('thu muc')
                 path = input('noi luu')
                 download(client,path,filename,ip)
-            if mode == "upload orderly":
-                upload_orderly(client)
+            # if mode == "upload orderly":
+            #     upload_orderly(client)
+            if mode == "upload multithread":
+                process_login_updownload(client)
+                upload_multithreaded()
             if mode == "exit":
                 client.close()
                 break
+            if mode == "getlist":
+                pass
+
 
 
 def main():

@@ -10,11 +10,11 @@ PORT_SERVER = 9999
 HOST_SERVER = socket.gethostbyname(socket.gethostname())
 print(HOST_SERVER)
 ADDRESS_SERVER = (HOST_SERVER, PORT_SERVER)
-LENGTH_SIZE = 16 #16 bytes để truyền kích thước file
-LENGTH_NAME = 16 #16 bytes để truyền tên file
-LENGTH_MODE = 16 # 8 bytes để đọc mode
-LENGTH_MESS = 16 # 16 bytes tín hiệu phản hồi lại bên gửi
-LENGTH_NUMBER_OF_FILE = 10
+LENGTH_SIZE = 32 #16 bytes để truyền kích thước file
+LENGTH_NAME = 32 #16 bytes để truyền tên file
+LENGTH_MODE = 32 # 8 bytes để đọc mode
+LENGTH_MESS = 32 # 16 bytes tín hiệu phản hồi lại bên gửi
+LENGTH_NUMBER_OF_FILE = 32
 BUFFER = 1024   # bộ nhớ đệm 1024 bytes
 message_notenough = 'NOTENOUGH'
 message_enough = 'ENOUGH'
@@ -23,7 +23,9 @@ message_failure = 'FAILURE'
 message_error_notfound = 'ERRORNOTFOUND'
 message_setup_first_pass_word = 'SETUP_pass_word'
 message_setup_first_pin = 'SETUP_PIN'
+message_login = "LOGIN"
 data_server_folder = "C:/database"
+
 
 
 #Cấu hình logging
@@ -61,19 +63,30 @@ def listening(server_socket):
 #Xử lí kết nối với client
 def handle_client_connection(conn, addr):
     try:
-        process_login_client(conn) # xử lí đăng nhập 
+        message = conn.recv(LENGTH_MESS).decode().strip()
+        if message == message_login:
+            process_login_client(conn) # xử lí đăng nhập 
         while True:
             try:
                 # Nhận mode (upload hoặc download)
-
                 mode = conn.recv(LENGTH_MODE).decode().strip()
                 print('mode', mode)
                 # Xử lý mode
                 if mode == 'upload':
+                    process_login_updownload(conn,conn.getpeername()[0])
                     response_upload(conn)  # Xử lý upload
                 if mode == 'download':
                     print('ok')
                     response_download(conn)  # Xử lý download
+                if mode == "upload multithread":
+                    process_login_updownload(conn,conn.getpeername()[0])
+                if mode == "upload multithread1":
+                    response_upload(conn)
+                if mode == "getlist":
+                    send_directories_and_files(conn)
+
+                # if mode == "upload orderly":
+                #     response_upload_orderly(conn)
                 if mode == 'exit':
                     break
             except:
@@ -89,7 +102,6 @@ def handle_client_connection(conn, addr):
 
 def response_upload(connection):
     try:
-        process_login_updownload(connection,connection.getpeername()[0])
         name_file_processed = get_name_file_processed(connection)
         #Nhan size
         try:
@@ -134,12 +146,13 @@ def response_download(connection):
         print('Finished')
 
 
-#client
-def reponse_upload_orderly(connection):
-    number_of_file = connection.recv(LENGTH_NUMBER_OF_FILE).decode().strip()
-    number_of_file = int(number_of_file)
-    for step in range(number_of_file):
-        response_upload(connection)
+# #client
+# def response_upload_orderly(connection):
+
+#     number_of_file = connection.recv(LENGTH_NUMBER_OF_FILE).decode().strip()
+#     number_of_file = int(number_of_file)
+#     for step in range(number_of_file):
+#         response_upload(connection)
 '''
 CÁC HÀM HỖ TRỢ
 ||||||||||||||
@@ -413,11 +426,15 @@ def get_directories_and_files(parent_dir):
 def send_directories_and_files(connection):
     connection.send(get_directories_and_files(data_server_folder).ljust(BUFFER).encode(ENCODING))
 
+###
+
+
 def main():
     server_socket = init_server()
     listening(server_socket)
     # info = get_directories_and_files(data_server_folder)
     # print(info)
+
 
     
 if __name__ == '__main__':
