@@ -187,11 +187,9 @@ def response_download_support(connection, new_path):
 
 def set_pass_word_for_first_time(conn):
     try:
-        print('do ne')
         pass_word_path = data_server_folder + '/' + str(conn.getpeername()[0]) + '/' + '_pass_word.txt'
         while True:
             _pass_word = conn.recv(LENGTH_SIZE).decode().strip()
-            print(_pass_word)
             if  _pass_word.isdigit() == False: conn.send(message_setup_first_pass_word.ljust(LENGTH_MESS).encode(ENCODING))
             else: 
                 break
@@ -290,15 +288,12 @@ def process_login_updownload(conn, response_ip):
 
 def set_pin_for_first_time(conn, response_ip):
     try:
-        print('do ne')
         pin_path = data_server_folder + '/' + str(response_ip) + '/' + '_pin.txt'
         while True:
             _pin = conn.recv(LENGTH_SIZE).decode().strip()
-            print('dasd', _pin)
-            if  _pin.isdigit(): break
+            if  _pin.isdigit() == False: conn.send(message_setup_first_pass_word.ljust(LENGTH_MESS).encode(ENCODING))
             else: 
-                conn.send(message_setup_first_pin.ljust(LENGTH_MESS).encode(ENCODING))
-
+                break
         with open(pin_path,'w') as file:
             file.write(_pin)
         return(_pin)
@@ -351,7 +346,8 @@ def validate_client_when_updownload(conn,response_ip):
         if key != valid_key:
             print(f"Client at {addr} provided invalid key: {key}")
             return False
-        return True
+        else:
+            return True
     except :
         return False
 

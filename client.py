@@ -56,12 +56,11 @@ def enter_pin(client):
             initpin = input('Khoi tao pin: ')
             client.send(initpin.ljust(LENGTH_SIZE).encode(ENCODING))  # Đảm bảo pin có đủ độ dài
             message = client.recv(LENGTH_MESS).decode().strip()
-        elif message == message_success:
+        if message == message_success:
             pin = input('Nhap vao pin: ')
             client.send(pin.ljust(LENGTH_SIZE).encode(ENCODING))  # Đảm bảo pin có đủ độ dài
             break
         else: 
-            message = client.recv(LENGTH_MESS).decode().strip()
             print(message)
 
 
@@ -73,12 +72,12 @@ def process_login_updownload(client): #xử lí đăng nhập
             message = client.recv(LENGTH_MESS).decode().strip()
             print('message', message)
 
-            while True:
-                if message == message_failure:
+            
+            while message == message_failure:
                     print('SAI PIN')
                     enter_pin(client)
                     message = client.recv(LENGTH_MESS).decode().strip()
-                break
+
 
 def process_login_client(client): #xử lí đăng nhập
     # Gọi hàm nhập mật khẩu
