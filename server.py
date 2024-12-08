@@ -16,6 +16,7 @@ LENGTH_MODE = 32 # 8 bytes để đọc mode
 LENGTH_MESS = 32 # 16 bytes tín hiệu phản hồi lại bên gửi
 LENGTH_NUMBER_OF_FILE = 32
 BUFFER = 1024   # bộ nhớ đệm 1024 bytes
+LENGTH_DIR =  5000 # GỬI DANH SÁCH TỆP 
 message_notenough = 'NOTENOUGH'
 message_enough = 'ENOUGH'
 message_success = 'SUCCESS'
@@ -35,7 +36,7 @@ logging.basicConfig(
     datefmt='%Y-%m-%d %H:%M:%S',
     handlers=[
         logging.StreamHandler(),
-        logging.FileHandler(data_server_folder+'/'+'server_log1.txt')
+        logging.FileHandler(data_server_folder+'/'+'server_log.txt')
     ]
 )
 
@@ -45,6 +46,7 @@ def init_server():
     server_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     server_socket.bind(ADDRESS_SERVER)
     server_socket.listen(10)
+    logging.info(f"Server [{ADDRESS_SERVER}] initialized and listening")
     return server_socket
 
 #Listening
@@ -57,7 +59,7 @@ def listening(server_socket):
         print(f"Unexpected error: {e}")
     finally:
         server_socket.close()
-        logging.warning("Socket closed. Server stopped.")    
+        logging.info("Socket closed. Server stopped.")    
 
 
 #Xử lí kết nối với client
@@ -66,6 +68,7 @@ def handle_client_connection(conn, addr):
         message = conn.recv(LENGTH_MESS).decode().strip()
         if message == message_login:
             process_login_client(conn) # xử lí đăng nhập 
+            logging.info(f"Connection established with client {addr}")
         while True:
             try:
                 # Nhận mode (upload hoặc download)
@@ -83,20 +86,17 @@ def handle_client_connection(conn, addr):
                 if mode == "upload multithread1":
                     response_upload(conn)
                 if mode == "getlist":
+                    process_login_updownload(conn,conn.getpeername()[0])
                     send_directories_and_files(conn)
-
-                # if mode == "upload orderly":
-                #     response_upload_orderly(conn)
                 if mode == 'exit':
                     break
             except:
-                print('ERROR')
                 break
 
     except Exception as e:
         print(f"Error handling client {addr}: {e}")
     finally:
-        print('end')
+        logging.info(f"{addr} closed connection")
         conn.close()  # Đảm bảo kết nối được đóng sau khi hoàn tất xử lý
 
 
@@ -112,8 +112,8 @@ def response_upload(connection):
             return
          # Nhận và lưu nội dung file
         try:
-            logging.info(f"upload {name_file_processed} on server")
             get_content(connection, name_file_processed, file_size)
+            logging.info(f"{connection.getpeername()[0]} uploaded {name_file_processed} on server")
         except (OSError, IOError) as e:
             print(f"File I/O error: {e}")
             return
@@ -136,6 +136,7 @@ def response_download(connection):
             new_path = get_path_of_server(new_path,response_ip)
             print(new_path)
             response_download_support(connection, new_path)
+            logging.info(f"{connection.getpeername()[0]} downloaded {new_path} on server")
     except ConnectionResetError:
         print("Client disconnected unexpectedly.")
     except socket.error as e:
@@ -262,7 +263,7 @@ def listening_support(server_socket):
             except socket.error as e:
                 print(f"Socket error: {e}")
             except Exception as e:
-                print(f"Unexpected errore: {e}")
+                print(f"Unexpected error: {e}")
 
 #xử lí thao tác nhập mã mat khau để dang nhap
 def process_login_client(conn):
@@ -272,6 +273,7 @@ def process_login_client(conn):
             conn.send(message_failure.ljust(LENGTH_MESS).encode(ENCODING))
             is_validated_client = validate_client(conn)
         conn.send(message_success.ljust(LENGTH_MESS).encode())
+        logging.info(f"{conn.getpeername()[0]} successfully login.")
     except:
         return
     
@@ -282,6 +284,7 @@ def process_login_updownload(conn, response_ip):
             conn.send(message_failure.ljust(LENGTH_MESS).encode(ENCODING))
             is_validated_client = validate_client_when_updownload(conn, response_ip)
         conn.send(message_success.ljust(LENGTH_MESS).encode(ENCODING))
+        logging.info(f"{conn.getpeername()[0]} successfully enter pin.")
     except:
         return
 
@@ -311,16 +314,12 @@ def get_pin(conn,response_ip):
             if response_ip == conn.getpeername()[0]:
                 fd = os.open(pin_path, os.O_CREAT | os.O_WRONLY)
                 os.close(fd)
-            else:
-                print('not bang')
         if os.path.getsize(pin_path) == 0:
             if response_ip == conn.getpeername()[0]:
                 conn.send(message_setup_first_pin.ljust(LENGTH_MESS).encode(ENCODING))
                 initpin = set_pin_for_first_time(conn,response_ip)
                 conn.send(message_success.ljust(LENGTH_MESS).encode(ENCODING))
                 return(initpin)
-            else:
-                print('not bang 1')
         else: 
             conn.send(message_success.ljust(LENGTH_MESS).encode(ENCODING))
 
@@ -377,13 +376,11 @@ def process_name_file(path_file):
         name, extension = os.path.splitext(path_file) 
         processed_name_file = f"{name}({i}){extension}"
         i += 1
-    print('Dia chi file o server', processed_name_file)
     return processed_name_file
 
 # tạo vị trí mới khi nhận file (chưa tinh chỉnh để không bị trùng)
 def get_path_of_server(src,client_ip):
     file_name = os.path.basename(src)
-    print(file_name)
     os.makedirs(data_server_folder + '/' + str(client_ip),exist_ok=True)
     new_path = data_server_folder + '/' + str(client_ip) + '/' + file_name
     return(new_path)
@@ -424,7 +421,7 @@ def get_directories_and_files(parent_dir):
     return json.dumps(result)
 
 def send_directories_and_files(connection):
-    connection.send(get_directories_and_files(data_server_folder).ljust(BUFFER).encode(ENCODING))
+    connection.send(get_directories_and_files(data_server_folder).ljust(LENGTH_DIR).encode(ENCODING))
 
 ###
 
