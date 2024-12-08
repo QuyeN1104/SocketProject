@@ -354,7 +354,7 @@ def validate_client_when_updownload(conn,response_ip):
 # hàm trả về địa chỉ của file trên server (đã thêm cơ số phía sau)
 def get_name_file_processed(connection):
     #Nhan name file
-        name_file = connection.recv(BUFFER).decode().strip()
+        name_file = connection.recv(LENGTH_NAME).decode().strip()
         print(name_file)
         new_path = get_path_of_server(name_file,connection.getpeername()[0])
         print(new_path)

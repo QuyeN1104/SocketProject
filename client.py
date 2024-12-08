@@ -9,8 +9,8 @@ import threading
 from concurrent.futures import ThreadPoolExecutor
 import json
 
-LENGTH_NUMBER_OF_FILE = 10
-LENGTH_NAME = 16
+LENGTH_NUMBER_OF_FILE = 32
+LENGTH_NAME = 32
 ENCODING = 'utf-8'
 LENGTH_SIZE = 32 #16 bytes để truyền kích thước file
 LENGTH_MODE = 32  # 8 bytes để đọc mode
