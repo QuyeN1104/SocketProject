@@ -134,7 +134,6 @@ def response_download(connection):
             process_login_updownload(connection, response_ip)
             new_path = connection.recv(BUFFER).decode().strip()
             new_path = get_path_of_server(new_path,response_ip)
-            print(new_path)
             response_download_support(connection, new_path)
             logging.info(f"{connection.getpeername()[0]} downloaded {new_path} on server")
     except ConnectionResetError:
@@ -176,13 +175,13 @@ def response_download_support(connection, new_path):
                     connection.send(data)
         else:
             connection.send(message_error_notfound.ljust(LENGTH_MESS).encode(ENCODING))
-            print('file không tồn tại')
+            print('file not found')
 
         mess_from_client = connection.recv(LENGTH_MESS).decode().strip()
 
         # nếu gửi lại mãi mà vẫn không được thì sao ???? 
         if mess_from_client == message_notenough:
-            print('Gửi đi thất bại')
+            print('Send failed')
 
 
 def set_pass_word_for_first_time(conn):
@@ -223,12 +222,12 @@ def get_pass_word(conn):
             # Kiểm tra nội dung có phải số nguyên
             if content.isdigit():
                 number = int(content)
-                print(f"Số nguyên trong file: {number}")
+                print(f"The key_number is: {number}")
                 return (number)
             else:
-                print("Dữ liệu trong file không phải số nguyên.")
+                print("The data is not integer")
     except Exception as e:
-        print(f"Đã xảy ra lỗi: {e}")
+        print(f"Error happened : {e}")
 
 def validate_client(conn):
     try:
@@ -237,7 +236,7 @@ def validate_client(conn):
         valid_key = int(valid_key)
         key = conn.recv(LENGTH_SIZE).decode().strip()
         if key.isdigit() == False:
-            print('Mat khau khong phai so')
+            print('Password is not number')
             return False
         key = int(key)
         if key != valid_key:
@@ -324,12 +323,12 @@ def get_pin(conn,response_ip):
             # Kiểm tra nội dung có phải số nguyên
             if content.isdigit():
                 number = int(content)
-                print(f"Số nguyên trong file: {number}")
+                print(f"The pin in file is : {number}")
                 return (number)
             else:
-                print("Dữ liệu trong file không phải số nguyên.")
+                print("The data is not integer")
     except Exception as e:
-        print(f"Đã xảy ra lỗi: {e}")
+        print(f"Error happened: {e}")
 
 def validate_client_when_updownload(conn,response_ip):
     try:
@@ -338,7 +337,7 @@ def validate_client_when_updownload(conn,response_ip):
         valid_key = int(valid_key)
         key = conn.recv(LENGTH_SIZE).decode().strip()
         if key.isdigit() == False:
-            print('Ma pin khong phai so')
+            print('PIN is not integer')
             return False
         key = int(key)
         print('key', key)

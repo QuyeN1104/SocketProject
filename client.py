@@ -225,14 +225,16 @@ def get_content(client,name_file_and_path,file_size):
                 bar()
                 if not data:
                     if received_size < file_size:
-                        client.send(message_notenough.ljust(LENGTH_MESS,' ').encode(ENCODING))
                         os.remove(name_file_and_path)
                         print("Error: The data is insufficient")
                         break
                 if received_size == file_size:
                     break
-        if received_size == number_of_repeat: 
-                client.send(message_enough.ljust(LENGTH_MESS,' ').encode(ENCODING))
+        if received_size == file_size: 
+            client.send(message_enough.ljust(LENGTH_MESS,' ').encode(ENCODING))
+        else: 
+            client.send(message_notenough.ljust(LENGTH_MESS,' ').encode(ENCODING))
+
 
 
 #Hàm chính download
@@ -242,9 +244,9 @@ def download(client,name_path,name_file,response_ip):
     if message == message_error_notfound:
         print('Khong tim thay thu muc')
     else: 
-        process_login_updownload(client)
-        name_path_file = ""
         try:
+            process_login_updownload(client)
+            name_path_file = ""
             #Gửi tên file
             client.send(name_file.ljust(BUFFER,' ').encode(ENCODING))
             message = client.recv(LENGTH_MESS).decode().strip()
@@ -368,8 +370,8 @@ def menu():
                     upload(client)
                 if mode == "download":
                     filename = input('chon file')
-                    ip = input('thu muc')
-                    path = input('noi luu')
+                    path = 'C:/database'
+                    ip = '192.168.71.122'
                     download(client,path,filename,ip)
                 if mode == "upload multithread":
                     process_login_updownload(client)
